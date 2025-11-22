@@ -5,7 +5,7 @@ warnings.filterwarnings('ignore')
 
 # TensorFlow configuration
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2' 
-os.environ['TF_ENABLE_ONEDNN_OPTS'] = '0' 
+os.environ['TF_ENABLE_ONEDNN_OPTS'] = '0'  # Optional: used for performance tuning
 
 import pandas as pd
 import numpy as np
@@ -73,8 +73,8 @@ def load_data():
 def main():
     """Main training function"""
     # Get parameters from MLProject
-    n_estimators = int(sys.argv[1]) if len(sys.argv) > 1 else 100
-    max_depth = int(sys.argv[2]) if len(sys.argv) > 2 else 10
+    n_estimators = 100  # Hardcoded default values, can be passed as command line args or through MLProject
+    max_depth = 10
     
     print(f"🚀 Starting Training - Using TensorFlow Model")
     
