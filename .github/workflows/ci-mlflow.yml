@@ -1,0 +1,51 @@
+name: 🚀 CI/CD - MLflow TensorFlow Re-training & Artifact Storage
+
+on:
+  push:
+    branches: [ "main", "master" ]
+    paths:
+      - 'MLProject/**'
+  workflow_dispatch: 
+
+jobs:
+  train-and-upload: # Nama job diubah agar lebih sesuai
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: ⬇️ Checkout Repository
+        uses: actions/checkout@v4
+        
+      # Langkah 1: Persiapan Lingkungan Conda 
+      - name: 📦 Setup Conda Environment
+        uses: conda-incubator/setup-miniconda@v3
+        with:
+          auto-update-conda: true
+          environment-file: MLProject/conda.yaml
+          activate-environment: smsml-tensorflow-env
+          use-only-constructor: true
+
+      # Langkah 2: RUN MLFLOW PROJECT (Re-training)
+      - name: 🚀 Run MLflow Project and Retrain Model
+        id: run-mlflow
+        shell: conda-bash 
+        run: |
+          echo "Memulai pelatihan model TensorFlow via MLflow Project..."
+          
+          # Jalankan MLflow Project.
+          mlflow run MLProject --no-conda
+          
+          # Ambil Run ID terbaru (Diperlukan agar ada run ID untuk referensi)
+          LATEST_RUN_ID=$(mlflow runs list --max-results 1 --experiment-id 0 --lifecycle-stage active --output csv | awk 'NR>1 {print $1}')
+          echo "latest_run_id=$LATEST_RUN_ID" >> $GITHUB_OUTPUT
+          echo "Run ID Terbaru yang dibuat: $LATEST_RUN_ID"
+          
+
+      # Langkah 3: ARTIFACT STORAGE (Memenuhi kriteria Skilled)
+      - name: 💾 Upload mlruns Artifact to GitHub
+        uses: actions/upload-artifact@v4
+        with:
+          name: tensorflow-model-artefacts-${{ github.run_id }}
+          path: mlruns
+          retention-days: 7
+          
+      # HAPUS LANGKAH 4, 5, 6, 7, dan 8 (Docker dan Push)
