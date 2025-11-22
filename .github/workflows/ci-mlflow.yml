@@ -3,10 +3,7 @@ name: MLflow CI Workflow
 on:
   push:
     branches:
-      - main  # Trigger ketika ada perubahan di branch 'main'
-  pull_request:
-    branches:
-      - main  # Trigger ketika ada PR yang diajukan ke branch 'main'
+      - main
 
 jobs:
   run-mlflow:
@@ -27,7 +24,7 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install -r requirements.txt
+          pip install -r MLProject/requirements.txt
           conda env create -f MLProject/conda.yaml  # Install dependencies from conda.yaml
 
       # Step 4: Run MLflow Project
@@ -35,9 +32,9 @@ jobs:
         run: |
           mlflow run ./MLProject --experiment-name "SMSML_CI_CD" -v
 
-      # Step 5: Upload MLflow Artifacts (optional)
-      - name: Upload artifacts to GitHub
-        uses: actions/upload-artifact@v3.1  # Use version v3.1 to avoid deprecated v3
+      # Step 5: Upload MLflow Artifacts using v4 (Updated)
+      - name: Upload MLflow Artifacts
+        uses: actions/upload-artifact@v4  # Update to v4
         with:
           name: tensorflow-model-artefacts-${{ github.run_id }}
           path: mlruns  # Path to MLflow artifacts
