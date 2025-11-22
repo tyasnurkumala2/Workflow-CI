@@ -21,15 +21,18 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install -r requirements.txt
-          conda env create -f conda.yaml
+          pip install -r MLProject/requirements.txt  # Memastikan path ke requirements.txt sesuai
+
+      - name: Install conda dependencies
+        run: |
+          conda env create -f MLProject/conda.yaml  # Menginstal dependencies dari conda.yaml
 
       - name: Run MLflow Project
         run: |
           mlflow run ./MLProject --experiment-name "SMSML_CI_CD" -v
 
       - name: Upload model artifacts
-        uses: actions/upload-artifact@v2
+        uses: actions/upload-artifact@v3
         with:
           name: model
-          path: ./MLProject/model
+          path: ./MLProject/model  # Pastikan path sesuai dengan lokasi model yang disimpan
