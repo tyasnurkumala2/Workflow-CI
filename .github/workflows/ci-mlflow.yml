@@ -3,7 +3,7 @@ name: MLflow CI Workflow
 on:
   push:
     branches:
-      - main  # Atau sesuai dengan branch Anda
+      - main  # Or your desired branch
 
 jobs:
   run-mlflow:
@@ -21,18 +21,18 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install -r MLProject/requirements.txt  # Memastikan path ke requirements.txt sesuai
+          pip install -r MLProject/requirements.txt  # Ensure correct path to requirements.txt
 
       - name: Install conda dependencies
         run: |
-          conda env create -f MLProject/conda.yaml  # Menginstal dependencies dari conda.yaml
+          conda env create -f MLProject/conda.yaml  # Install dependencies from conda.yaml
 
       - name: Run MLflow Project
         run: |
           mlflow run ./MLProject --experiment-name "SMSML_CI_CD" -v
 
       - name: Upload model artifacts
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v3.1  # Update to v3.1
         with:
           name: model
-          path: ./MLProject/model  # Pastikan path sesuai dengan lokasi model yang disimpan
+          path: ./MLProject/model  # Ensure the correct path to saved model
