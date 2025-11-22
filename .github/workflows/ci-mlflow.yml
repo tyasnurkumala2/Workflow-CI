@@ -3,42 +3,34 @@ name: MLflow CI Workflow
 on:
   push:
     branches:
-      - main  # Trigger workflow pada branch main
-  pull_request:
-    branches:
-      - main  # Trigger saat pull request dibuat ke branch main
+      - main
 
 jobs:
   run-mlflow:
     runs-on: ubuntu-latest
 
     steps:
-      # Step 1: Checkout repository
       - name: Checkout repository
         uses: actions/checkout@v2
 
-      # Step 2: Set up Python environment
-      - name: Set up Python 3.10.13
+      - name: Set up Python
         uses: actions/setup-python@v2
         with:
-          python-version: '3.10.13'
+          python-version: '3.8'
 
-      # Step 3: Install dependencies from requirements.txt and conda.yaml
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install -r MLProject/requirements.txt  # Install dependencies dari requirements.txt
-          conda env create -f MLProject/conda.yaml  # Install dependencies dari conda.yaml
+          pip install -r MLProject/requirements.txt
+          conda env create -f MLProject/conda.yaml
 
-      # Step 4: Run MLflow project (Trigger eksperimen)
       - name: Run MLflow Project
         run: |
-          mlflow run ./MLProject --experiment-name "SMSML_CI_CD"  # Menjalankan eksperimen MLflow
+          mlflow run ./MLProject --experiment-name "SMSML_CI_CD"
 
-      # Step 5: Upload MLflow Artifacts to GitHub
       - name: Upload MLflow Artifacts
-        uses: actions/upload-artifact@v3.1  # Update ke v3.1 untuk menghindari deprecated v3
+        uses: actions/upload-artifact@v4  # Update to v4 to avoid deprecated v3
         with:
-          name: model-artifacts-${{ github.run_id }}  # Nama artefak yang akan di-upload
-          path: mlruns  # Path untuk menyimpan artefak MLflow
+          name: model-artifacts-${{ github.run_id }}
+          path: mlruns
           retention-days: 7
