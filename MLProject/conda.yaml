@@ -1,13 +1,13 @@
 name: mlflow-env
 channels:
-  - defaults
   - conda-forge
+  - defaults
 dependencies:
   - python=3.8
   - pip
   - pip:
-    - mlflow
-    - tensorflow
-    - scikit-learn
-    - pandas
-    - numpy
+      - mlflow
+      - tensorflow
+      - scikit-learn
+      - pandas
+      - numpy
