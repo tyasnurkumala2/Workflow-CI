@@ -1,5 +1,3 @@
-# modelling.py - Simplified for CI/CD
-
 import os
 import sys
 import warnings
@@ -19,9 +17,11 @@ import mlflow
 import mlflow.tensorflow
 
 # MLflow configuration
-# PERBAIKAN: Hapus baris 'mlflow.set_tracking_uri("./mlruns")'
-mlflow.set_experiment("SMSML_CI_CD") 
+# Set experiment before starting the run
+experiment_name = "SMSML_CI_CD"
+mlflow.set_experiment(experiment_name)
 
+# Function to create the model
 def create_model(input_shape):
     """Create simple neural network model"""
     model = tf.keras.models.Sequential([
@@ -38,10 +38,11 @@ def create_model(input_shape):
     )
     return model
 
+# Function to load and preprocess data
 def load_data():
     """Load and prepare data"""
     try:
-        # Ganti "namadataset_preprocessing/data_preprocessed.csv" dengan path yang benar
+        # Update the path to your dataset
         data_path = "namadataset_preprocessing/data_preprocessed.csv" 
         df = pd.read_csv(data_path)
         print(f"✅ Data loaded. Shape: {df.shape}")
@@ -71,7 +72,7 @@ def load_data():
 
 def main():
     """Main training function"""
-    # Get parameters dari MLProject
+    # Get parameters from MLProject
     n_estimators = int(sys.argv[1]) if len(sys.argv) > 1 else 100
     max_depth = int(sys.argv[2]) if len(sys.argv) > 2 else 10
     
@@ -82,13 +83,13 @@ def main():
     if X is None:
         return
     
-    # Split data
+    # Split data into training and testing sets
     X_train, X_test, y_train, y_test = train_test_split(
         X, y, test_size=0.2, random_state=42
     )
     
     # Start MLflow run
-    with mlflow.start_run(nested=True): # PERBAIKAN: Gunakan nested=True
+    with mlflow.start_run(nested=True):  # Using nested=True to allow sub-runs
         # Log parameters
         mlflow.log_param("n_estimators", n_estimators)
         mlflow.log_param("max_depth", max_depth)
@@ -106,7 +107,7 @@ def main():
             verbose=1
         )
         
-        # Evaluate model
+        # Evaluate model performance
         y_pred = (model.predict(X_test) > 0.5).astype("int32")
         accuracy = accuracy_score(y_test, y_pred)
         f1 = f1_score(y_test, y_pred)
