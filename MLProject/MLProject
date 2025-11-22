@@ -1,10 +1,10 @@
-name: smsml-tensorflow-project
+name: SMSML_CI_CD
 
-conda_env: conda.yaml
+conda_env: conda.yaml  # Menyebutkan file environment Conda
 
 entry_points:
   main:
+    command: "python modelling.py"
     parameters:
       n_estimators: {type: int, default: 100}
       max_depth: {type: int, default: 10}
-    command: "python modelling.py {n_estimators} {max_depth}"
