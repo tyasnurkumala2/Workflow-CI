@@ -19,8 +19,7 @@ import mlflow
 import mlflow.tensorflow
 
 # MLflow configuration
-# Perbaikan: Hapus baris 'mlflow.set_tracking_uri("./mlruns")' karena mengganggu
-# konteks run yang dibuat oleh 'mlflow run MLProject'.
+# PERBAIKAN: Hapus baris 'mlflow.set_tracking_uri("./mlruns")'
 mlflow.set_experiment("SMSML_CI_CD") 
 
 def create_model(input_shape):
@@ -42,7 +41,8 @@ def create_model(input_shape):
 def load_data():
     """Load and prepare data"""
     try:
-        data_path = "namadataset_preprocessing/data_preprocessed.csv"
+        # Ganti "namadataset_preprocessing/data_preprocessed.csv" dengan path yang benar
+        data_path = "namadataset_preprocessing/data_preprocessed.csv" 
         df = pd.read_csv(data_path)
         print(f"✅ Data loaded. Shape: {df.shape}")
         
@@ -61,7 +61,7 @@ def load_data():
         
     except Exception as e:
         print(f"❌ Error loading data: {str(e)}")
-        # Create sample data as fallback
+        # Fallback data sample
         n_samples = 1000
         n_features = 10
         X = np.random.randn(n_samples, n_features).astype(np.float32)
@@ -71,7 +71,7 @@ def load_data():
 
 def main():
     """Main training function"""
-    # Get parameters
+    # Get parameters dari MLProject
     n_estimators = int(sys.argv[1]) if len(sys.argv) > 1 else 100
     max_depth = int(sys.argv[2]) if len(sys.argv) > 2 else 10
     
@@ -88,8 +88,7 @@ def main():
     )
     
     # Start MLflow run
-    # Perbaikan: Tambahkan nested=True agar run baru menjadi child dari Project run
-    with mlflow.start_run(nested=True): 
+    with mlflow.start_run(nested=True): # PERBAIKAN: Gunakan nested=True
         # Log parameters
         mlflow.log_param("n_estimators", n_estimators)
         mlflow.log_param("max_depth", max_depth)
