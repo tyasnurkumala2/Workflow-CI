@@ -15,36 +15,46 @@ jobs:
       - name: ⬇️ Checkout Repository
         uses: actions/checkout@v4
         
-      # Langkah 1: Persiapan Lingkungan Conda 
-      - name: 📦 Setup Conda Environment
-        uses: conda-incubator/setup-miniconda@v3
+      # Langkah 1: Setup Python (Menggantikan Conda)
+      - name: 📦 Set up Python 3.10.13
+        uses: actions/setup-python@v4
         with:
-          auto-update-conda: true
-          environment-file: MLProject/conda.yaml
-          activate-environment: smsml-tensorflow-env
-          use-only-constructor: true
+          python-version: "3.10.13" 
+          
+      # Langkah 2: Install Dependencies (Menggunakan pip, menghindari masalah Conda)
+      - name: 🐍 Install Python Dependencies
+        run: |
+          python -m pip install --upgrade pip
+          # Instal semua dependencies dari conda.yaml melalui pip
+          pip install \
+            tensorflow==2.13.0 \
+            mlflow==2.19.0 \
+            scikit-learn==1.3.0 \
+            pandas==2.1.0 \
+            numpy==1.24.0 \
+            cloudpickle==3.1.0
 
-      # Langkah 2: RUN MLFLOW PROJECT (Re-training)
+      # Langkah 3: RUN MLFLOW PROJECT (Re-training)
       - name: 🚀 Run MLflow Project and Retrain Model
         id: run-mlflow
-        shell: bash # <-- PERBAIKAN: Kembali menggunakan shell: bash
+        shell: bash
         run: |
           echo "Memulai pelatihan model TensorFlow via MLflow Project..."
           
-          # PERBAIKAN KUNCI: Inisialisasi Conda secara eksplisit sebelum mengaktifkan
-          source /opt/conda/etc/profile.d/conda.sh
-          conda activate smsml-tensorflow-env 
+          # Jalankan MLflow Project. --env-manager=local menggunakan environment pip yang sudah aktif
+          mlflow run MLProject --env-manager=local
           
-          # Jalankan MLflow Project.
-          mlflow run MLProject --no-conda
-          
-          # Ambil Run ID terbaru
-          LATEST_RUN_ID=$(mlflow runs list --max-results 1 --experiment-id 0 --lifecycle-stage active --output csv | awk 'NR>1 {print $1}')
-          echo "latest_run_id=$LATEST_RUN_ID" >> $GITHUB_OUTPUT
-          echo "Run ID Terbaru yang dibuat: $LATEST_RUN_ID"
+      # Langkah 4: Get latest run_id (Diperlukan untuk Artefak)
+      - name: 🆔 Get latest MLflow run_id
+        id: get-run-id
+        run: |
+          # Perintah ini mengambil ID run terbaru yang dibuat oleh MLflow
+          RUN_ID=$(ls -td mlruns/0/*/ | head -n 1 | cut -d'/' -f3)
+          echo "latest_run_id=$RUN_ID" >> $GITHUB_OUTPUT 
+          echo "Latest run_id: $RUN_ID"
           
 
-      # Langkah 3: ARTIFACT STORAGE (Memenuhi kriteria Skilled)
+      # Langkah 5: ARTIFACT STORAGE (Memenuhi kriteria Skilled)
       - name: 💾 Upload mlruns Artifact to GitHub
         uses: actions/upload-artifact@v4
         with:
