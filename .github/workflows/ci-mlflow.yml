@@ -1,61 +1,37 @@
-name: 🚀 CI/CD - MLflow TensorFlow Re-training & Artifact Storage
+name: MLflow CI Workflow
 
 on:
   push:
-    branches: [ "main", "master" ]
-    paths:
-      - 'MLProject/**'
-  workflow_dispatch: 
+    branches:
+      - main  # Trigger saat ada perubahan di branch main
 
 jobs:
-  train-and-upload: 
+  run-mlflow:
     runs-on: ubuntu-latest
 
     steps:
-      - name: ⬇️ Checkout Repository
-        uses: actions/checkout@v4
-        
-      # Langkah 1: Setup Python
-      - name: 📦 Set up Python 3.10.13
-        uses: actions/setup-python@v4
+      - name: Checkout repository
+        uses: actions/checkout@v2
+
+      - name: Set up Python 3.10.13
+        uses: actions/setup-python@v2
         with:
-          python-version: "3.10.13" 
-          
-      # Langkah 2: Install Dependencies
-      - name: 🐍 Install Python Dependencies
+          python-version: '3.10.13'
+
+      - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install \
-            tensorflow==2.13.0 \
-            mlflow==2.19.0 \
-            scikit-learn==1.3.0 \
-            pandas==2.1.0 \
-            numpy==1.24.0 \
-            cloudpickle==3.1.0
+          pip install -r MLProject/requirements.txt  # Install dependencies dari requirements.txt
+          conda env create -f MLProject/conda.yaml  # Install dependencies dari conda.yaml
 
-      # Langkah 3: RUN MLFLOW PROJECT (Re-training)
-      - name: 🚀 Run MLflow Project and Retrain Model
-        id: run-mlflow
-        shell: bash
+      - name: Run MLflow Project
         run: |
-          echo "Memulai pelatihan model TensorFlow via MLflow Project."
-          
-          # Jalankan MLflow Project
-          mlflow run MLProject --env-manager=local
-          
-      # Langkah 4: Get latest run_id
-      - name: 🆔 Get latest MLflow run_id
-        id: get-run-id
-        run: |
-          RUN_ID=$(ls -td mlruns/0/*/ | head -n 1 | cut -d'/' -f3)
-          echo "latest_run_id=$RUN_ID" >> $GITHUB_OUTPUT 
-          echo "Latest run_id: $RUN_ID"
-          
+          conda run -n mlflow-843f9a16f45e4548f1d4270bda30bb10dcc5ca53 python modelling.py
+          # Menggunakan `conda run` untuk menjalankan skrip Python dalam environment Conda yang dibuat
 
-      # Langkah 5: ARTIFACT STORAGE (Memenuhi kriteria Skilled)
-      - name: 💾 Upload mlruns Artifact to GitHub
-        uses: actions/upload-artifact@v3.1  # Update ke v3.1
+      - name: Upload MLflow Artifacts
+        uses: actions/upload-artifact@v4
         with:
-          name: tensorflow-model-artefacts-${{ github.run_id }}
+          name: model-artifacts-${{ github.run_id }}
           path: mlruns
           retention-days: 7
