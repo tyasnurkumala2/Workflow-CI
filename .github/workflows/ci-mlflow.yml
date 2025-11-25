@@ -54,12 +54,12 @@ jobs:
           path: MLProject/mlruns
           retention-days: 7
 
-      # Step 7: Cari Run ID Artefak Model Terbaik (CD - FIX: Sintaks Python Rapi)
+      # Step 7: Cari Run ID Artefak Model Terbaik (CD - Kunci di sini!)
       - name: Get Latest Model Artifact Path
         id: get_model_path
         run: |
-          # 1. Python Script mencari RUN_ID dan mencetaknya ke stdout
-          # Menggunakan \n untuk memastikan baris baru di script Python
+          # Perhatikan INDENTASI KHUSUS di bawah ini.
+          # Tanda kutip (") dan RUN_ID=$(...) harus berada pada baris yang sama.
           RUN_ID=$(conda run -n mlflow-env python -c "
 import mlflow
 import os
