@@ -17,9 +17,6 @@ import mlflow
 import mlflow.tensorflow
 
 # MLflow configuration
-# Set tracking URI (harus sama dengan workflow: MLProject/mlruns)
-mlflow.set_tracking_uri("MLProject/mlruns")
-
 # Set experiment before starting the run
 experiment_name = "SMSML_CI_CD"
 mlflow.set_experiment(experiment_name)
@@ -120,10 +117,10 @@ def main():
         mlflow.log_metric("f1_score", f1)
         mlflow.log_metric("final_loss", history.history['loss'][-1])
         
-        # Log model (UBAH: artifact_path dari "model" ke "tensorflow_model" agar cocok dengan workflow)
+        # Log model
         mlflow.tensorflow.log_model(
             model=model,
-            artifact_path="tensorflow_model"
+            artifact_path="model"
         )
         
         print(f"✅ Training completed! Accuracy: {accuracy:.4f}, F1-Score: {f1:.4f}")
