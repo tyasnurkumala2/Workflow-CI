@@ -65,7 +65,6 @@ jobs:
           retention-days: 7
 
       # Langkah 6: Get latest MLflow run_id (Cari Run ID Artefak Model Terbaik)
-      # Menggunakan teknik Python Here-Document (EOF) untuk menghindari error YAML.
       - name: Get Latest Model Artifact Path
         id: get_model_path
         run: |
@@ -75,10 +74,9 @@ jobs:
           export MLFLOW_TRACKING_URI="${{ env.MLFLOW_RUNS_PATH }}" 
           
           # Jalankan skrip Python multi-baris
-          RUN_ID=$(conda run -n mlflow-env python - << EOF
-import mlflow
+          RUN_ID=$(conda run -n mlflow-env python - <<EOF
 import os
-import pandas as pd # Tambahkan jika MLflow Search Runs mengembalikan DataFrame
+import pandas as pd
 import sys
 
 # Setup Tracking URI
