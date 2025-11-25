@@ -5,7 +5,7 @@ warnings.filterwarnings('ignore')
 
 # TensorFlow configuration
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2' 
-os.environ['TF_ENABLE_ONEDNN_OPTS'] = '0'  # Optional: used for performance tuning
+os.environ['TF_ENABLE_ONEDNN_OPTS'] = '0' 
 
 import pandas as pd
 import numpy as np
@@ -42,7 +42,7 @@ def create_model(input_shape):
 def load_data():
     """Load and prepare data"""
     try:
-        # Update the path to your dataset
+        # Update the path to your dataset (Asumsi path ini ada di dalam folder MLProject)
         data_path = "namadataset_preprocessing/data_preprocessed.csv" 
         df = pd.read_csv(data_path)
         print(f"✅ Data loaded. Shape: {df.shape}")
@@ -51,7 +51,7 @@ def load_data():
         X = df.drop(['RiskLevel_Encoded'], axis=1, errors='ignore')
         y = df['RiskLevel_Encoded']
         
-        # Clean columns
+        # Clean columns (jika kolom "Risk Level" masih ada)
         if 'Risk Level' in X.columns:
             X = X.drop('Risk Level', axis=1)
         
@@ -73,7 +73,7 @@ def load_data():
 def main():
     """Main training function"""
     # Get parameters from MLProject
-    n_estimators = 100  # Hardcoded default values, can be passed as command line args or through MLProject
+    n_estimators = 100 
     max_depth = 10
     
     print(f"🚀 Starting Training - Using TensorFlow Model")
@@ -88,8 +88,8 @@ def main():
         X, y, test_size=0.2, random_state=42
     )
     
-    # Start MLflow run
-    with mlflow.start_run(nested=True):  # Using nested=True to allow sub-runs
+    # Start MLflow run (PERBAIKAN: nested=True DIHAPUS)
+    with mlflow.start_run():
         # Log parameters
         mlflow.log_param("n_estimators", n_estimators)
         mlflow.log_param("max_depth", max_depth)
@@ -117,10 +117,10 @@ def main():
         mlflow.log_metric("f1_score", f1)
         mlflow.log_metric("final_loss", history.history['loss'][-1])
         
-        # Log model
+        # Log model (PERBAIKAN: artifact_path "model" sudah benar)
         mlflow.tensorflow.log_model(
             model=model,
-            artifact_path="model"
+            artifact_path="model" 
         )
         
         print(f"✅ Training completed! Accuracy: {accuracy:.4f}, F1-Score: {f1:.4f}")
