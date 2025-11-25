@@ -41,7 +41,7 @@ jobs:
           path: mlruns
           retention-days: 7
 
-      # Step 6: Upload MLflow Artifacts to Google Dr
+      # Step 6: Upload MLflow Artifacts to Google Drive
       - name: Upload to Google Drive
         run: |
           # Install gdrive CLI
