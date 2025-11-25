@@ -8,6 +8,7 @@ on:
 env:
   DOCKER_USERNAME: ${{ secrets.DOCKER_USERNAME }}
   DOCKER_PASSWORD: ${{ secrets.DOCKER_PASSWORD }}
+  # Ganti dengan nama image Docker Hub Anda
   DOCKER_IMAGE_NAME: tyasnurkumala/smsml-risk-classifier 
   MLFLOW_EXP_NAME: SMSML_CI_CD 
   MODEL_PORT: 8080
@@ -17,57 +18,54 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      # Step 1-3: Setup dan Install Dependencies
+      # Step 1: Checkout repository
       - name: Checkout repository
-        uses: actions/checkout@v2
+        uses: actions/checkout@v3 # Menggunakan v3 sesuai template
 
+      # Step 2: Setup Python dan Conda Environment
       - name: Set up Python 3.10.13
-        uses: actions/setup-python@v2
+        uses: actions/setup-python@v4 # Menggunakan v4 sesuai template
         with:
           python-version: '3.10.13'
 
-      - name: Install dependencies
+      # Step 3: Install dependencies
+      - name: Install dependencies and Create Conda Env
         run: |
           python -m pip install --upgrade pip
           pip install -r MLProject/requirements.txt
-          conda env create -f MLProject/conda.yaml
-          pip install mlflow 
+          conda env create -f MLProject/conda.yaml # Membuat environment 'mlflow-env'
+          pip install mlflow # Instalasi tambahan untuk CLI
 
       # Step 4: Run MLflow Project (Training)
       - name: Run MLflow Project (Training)
         run: |
           cd MLProject 
+          # Jalankan modelling.py di dalam environment Conda
           conda run -n mlflow-env python modelling.py 
 
-      # Step 5: Login Docker Hub
-      - name: Login to Docker Hub
-        uses: docker/login-action@v1
-        with:
-          username: ${{ env.DOCKER_USERNAME }}
-          password: ${{ env.DOCKER_PASSWORD }} 
-
-      # Step 6: Upload MLflow Artifacts (CI - Path Fixed)
+      # Step 5: Upload MLflow Artifacts
       - name: Upload MLflow Artifacts
         uses: actions/upload-artifact@v4
         with:
           name: model-artifacts-${{ github.run_id }}
-          path: MLProject/mlruns
+          path: MLProject/mlruns # Path yang sudah benar
           retention-days: 7
 
-      # Step 7: Cari Run ID Artefak Model Terbaik (CD - Kunci di sini!)
+      # Step 6: Cari Run ID Artefak Model Terbaik (Menggunakan Python API)
+      # Ini lebih stabil daripada navigasi filesystem
       - name: Get Latest Model Artifact Path
         id: get_model_path
         run: |
-          # Perhatikan INDENTASI KHUSUS di bawah ini.
-          # Tanda kutip (") dan RUN_ID=$(...) harus berada pada baris yang sama.
+          # Setup URI ke lokasi mlruns yang dibuat di Step 4
+          export MLFLOW_TRACKING_URI="MLProject/mlruns" 
+          
           RUN_ID=$(conda run -n mlflow-env python -c "
 import mlflow
 import os
 import sys
 
-TRACKING_URI = os.path.join('MLProject', 'mlruns')
-mlflow.set_tracking_uri(TRACKING_URI)
-experiment_name = '${{ env.MLFLOW_EXP_NAME }}'
+# Menggunakan MLFLOW_TRACKING_URI dari shell environment
+experiment_name = os.environ.get('MLFLOW_EXP_NAME', 'Default') 
 
 runs = mlflow.search_runs(
     experiment_names=[experiment_name],
@@ -83,22 +81,29 @@ else:
 "
           )
           
-          # 2. Shell mengambil output dan melakukan validasi/setup
           if [ "$RUN_ID" == "NOT_FOUND" ] || [ -z "$RUN_ID" ]; then
             echo "::error::Tidak dapat menemukan RUN ID MLflow yang selesai."
             exit 1
           fi
 
           ARTIFACT_PATH="runs:/$RUN_ID/model" 
-          
           echo "artifact_path=$ARTIFACT_PATH" >> $GITHUB_OUTPUT
           echo "Found Artifact Path: $ARTIFACT_PATH"
+
+      # Step 7: Login ke Docker Hub
+      - name: Login to Docker Hub
+        uses: docker/login-action@v2 # Menggunakan v2 sesuai template
+        with:
+          username: ${{ env.DOCKER_USERNAME }}
+          password: ${{ env.DOCKER_PASSWORD }} 
           
       # Step 8: Build dan Push Docker Image (CD)
       - name: Build and Push Docker Image
         run: |
+          # Export URI lagi untuk CLI
           export MLFLOW_TRACKING_URI="MLProject/mlruns" 
 
+          # Build docker image menggunakan model URI dari step sebelumnya
           conda run -n mlflow-env mlflow models build-docker \
             --model-uri ${{ steps.get_model_path.outputs.artifact_path }} \
             --name ${{ env.DOCKER_IMAGE_NAME }}:latest \
