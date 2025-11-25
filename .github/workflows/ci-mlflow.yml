@@ -1,4 +1,4 @@
-name: MLflow CI/CD Docker Workflow
+name: MLflow CI/CD Docker Workflow # Nama Workflow Diperbarui
 
 on:
   push:
@@ -17,44 +17,53 @@ env:
   # Nama Eksperimen yang Anda gunakan di modelling.py
   MLFLOW_EXP_NAME: SMSML_CI_CD 
   
-  # Port internal container untuk serving (Port 5005 di Exporter Anda akan memanggil port ini)
+  # Port internal container untuk serving
   MODEL_PORT: 8080 
   
 jobs:
-  run-mlflow-and-deploy:
+  run-mlflow-and-deploy: # Nama Job Diperbarui
     runs-on: ubuntu-latest
 
     steps:
-      # Step 1: Checkout repository
+      # Step 1: Checkout repository (Original)
       - name: Checkout repository
         uses: actions/checkout@v2
 
-      # --- PERBAIKAN: Menggunakan Miniconda Action yang lebih stabil ---
-      # Step 2: Set up Miniconda Environment
-      - name: Set up Miniconda Environment
-        uses: conda-incubator/setup-miniconda@v2
+      # Step 2: Set up Python environment (Original)
+      - name: Set up Python 3.10.13
+        uses: actions/setup-python@v2
         with:
-          python-version: '3.8' # Sesuai dengan conda.yaml
-          auto-update-conda: true
-          environment-file: conda.yaml
-          activate-environment: mlflow-env # Nama environment dari conda.yaml
+          python-version: '3.10.13'
 
-      # Step 3: Jalankan Project MLflow (Training)
+      # Step 3: Install dependencies (Original)
+      # Menginstall Conda dan Pip dependencies di lingkungan kerja
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          # Instal dependencies yang ada di requirements.txt (MLProject/requirements.txt)
+          pip install -r MLProject/requirements.txt 
+          # Membuat Conda environment (MLProject/conda.yaml)
+          conda env create -f MLProject/conda.yaml 
+          # Menginstal MLflow di lingkungan dasar untuk langkah build-docker
+          pip install mlflow
+
+      # Step 4: Run MLflow Project (Original)
       - name: Run MLflow Project (Training)
         run: |
-          # Menjalankan modelling.py di dalam Conda environment yang sudah terinstal
+          cd MLProject  # Pindah ke folder MLProject
+          # Jalankan modelling.py di dalam environment Conda yang sudah dibuat
           conda run -n mlflow-env python modelling.py
-          
-      # --- LANGKAH DEPLOYMENT DOCKER HUB ---
 
-      # Step 4: Login ke Docker Hub
+      # --- LANGKAH DEPLOYMENT DOCKER HUB BARU ---
+
+      # Step 5: Login ke Docker Hub
       - name: Login to Docker Hub
         uses: docker/login-action@v1
         with:
           username: ${{ env.DOCKER_USERNAME }}
           password: ${{ env.DOCKER_PASSWORD }} # Menggunakan Personal Access Token (PAT)
 
-      # Step 5: Cari Run ID Artefak Model Terbaik (Terkini)
+      # Step 6: Cari Run ID Artefak Model Terbaik (Terkini)
       - name: Get Latest Model Artifact Path
         id: get_model_path
         run: |
@@ -65,17 +74,16 @@ jobs:
                    --query "attributes.status = 'FINISHED'" \
                    | grep 'run_id:' | head -n 1 | awk '{print $2}')
           
-          # Path artefak model Keras/TF Anda yang di-log
-          ARTIFACT_PATH="runs:/$RUN_ID/model" 
+          # Path artefak model Keras/TF Anda: artifact_path="tensorflow_model"
+          ARTIFACT_PATH="runs:/$RUN_ID/tensorflow_model" 
           
           echo "::set-output name=artifact_path::$ARTIFACT_PATH"
           echo "Found Artifact Path: $ARTIFACT_PATH"
           
-      # Step 6: Build dan Push Docker Image Menggunakan mlflow build-docker
+      # Step 7: Build dan Push Docker Image Menggunakan mlflow build-docker
       - name: Build and Push Docker Image
         run: |
-          # Perintah ini mengambil artefak dari MLflow, membangun image Docker
-          # dan secara otomatis mendorongnya ke Docker Hub.
+          # Perintah ini menggunakan MLflow yang diinstal di Step 3
           mlflow models build-docker \
             --model-uri ${{ steps.get_model_path.outputs.artifact_path }} \
             --name ${{ env.DOCKER_IMAGE_NAME }} \
@@ -85,7 +93,7 @@ jobs:
             
           echo "✅ Docker image ${{ env.DOCKER_IMAGE_NAME }}:latest berhasil dibuat dan didorong ke Docker Hub."
 
-      # Step 7: Upload MLflow Artifacts (Langkah opsional)
+      # Step 8: Upload MLflow Artifacts (Original Step 5, dipindah)
       - name: Upload MLflow Artifacts
         uses: actions/upload-artifact@v4
         with:
