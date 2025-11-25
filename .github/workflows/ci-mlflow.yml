@@ -55,16 +55,18 @@ jobs:
           path: MLProject/mlruns  # Path yang sudah benar
           retention-days: 7
 
-      # Step 7: Cari Run ID Artefak Model Terbaik (CD - FIX menggunakan Python API)
+     # Step 7: Cari Run ID Artefak Model Terbaik (CD - FIX menggunakan Python API)
       - name: Get Latest Model Artifact Path
         id: get_model_path
         run: |
           # 1. Python Script mencari RUN_ID dan mencetaknya ke stdout
+          # PASTIKAN INDENTASI DIMULAI DARI KOLOM PERTAMA (TIDAK ADA SPASI SEBELUM RUN_ID=...)
           RUN_ID=$(conda run -n mlflow-env python -c "
 import mlflow
 import os
 import sys
 
+# Tentukan lokasi tracking store relatif terhadap root repo
 TRACKING_URI = os.path.join('MLProject', 'mlruns')
 mlflow.set_tracking_uri(TRACKING_URI)
 experiment_name = '${{ env.MLFLOW_EXP_NAME }}'
