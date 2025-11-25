@@ -61,7 +61,7 @@ jobs:
           password: ${{ env.DOCKER_PASSWORD }}
 
       # -------------------------------------------------
-      # 6. GET LATEST RUN ID (FIXED HEREDOC)
+      # 6. GET LATEST RUN ID (FULLY FIXED)
       # -------------------------------------------------
       - name: Get Latest Model Artifact Path
         id: get_model_path
@@ -100,7 +100,6 @@ EOF
           fi
 
           ARTIFACT_PATH="runs:/$RUN_ID/tensorflow_model"
-
           echo "artifact_path=$ARTIFACT_PATH" >> $GITHUB_OUTPUT
           echo "Found Artifact Path: $ARTIFACT_PATH"
 
@@ -110,7 +109,6 @@ EOF
       - name: Build and Push Docker Image
         run: |
           export MLFLOW_TRACKING_URI="MLProject/mlruns"
-
           conda run -n mlflow-env mlflow models build-docker \
             --model-uri ${{ steps.get_model_path.outputs.artifact_path }} \
             --name ${{ env.DOCKER_IMAGE_NAME }}:latest \
