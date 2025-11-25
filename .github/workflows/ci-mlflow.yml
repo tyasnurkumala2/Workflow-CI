@@ -3,23 +3,22 @@ name: MLflow CI/CD Docker Workflow
 on:
   push:
     branches:
-      - main  # Trigger saat ada perubahan di branch main
-
+      - main
+  
 # --- 1. DEFINISI ENVIRONMENT VARIABLES & SECRETS ---
 env:
   DOCKER_USERNAME: ${{ secrets.DOCKER_USERNAME }}
   DOCKER_PASSWORD: ${{ secrets.DOCKER_PASSWORD }}
-  
   DOCKER_IMAGE_NAME: tyasnurkumala/smsml-risk-classifier 
   MLFLOW_EXP_NAME: SMSML_CI_CD 
-  MODEL_PORT: 8080 # Tetap dipertahankan meskipun tidak dipakai di build-docker
+  MODEL_PORT: 8080
   
 jobs:
   run-mlflow-and-deploy: 
     runs-on: ubuntu-latest
 
     steps:
-      # Step 1-5 (Tidak Berubah)
+      # Step 1-4: Setup dan Training (Tidak ada perubahan)
       - name: Checkout repository
         uses: actions/checkout@v2
 
@@ -40,29 +39,29 @@ jobs:
           cd MLProject 
           conda run -n mlflow-env python modelling.py 
 
+      # Step 5: Login ke Docker Hub
       - name: Login to Docker Hub
         uses: docker/login-action@v1
         with:
           username: ${{ env.DOCKER_USERNAME }}
           password: ${{ env.DOCKER_PASSWORD }} 
 
-      # Step 6: Cari Run ID Artefak Model Terbaik (FINAL FIX: Set Tracking URI)
+      # Step 6: Cari Run ID Artefak Model Terbaik (FIXED)
       - name: Get Latest Model Artifact Path
         id: get_model_path
         run: |
-          # FIX 1: Tentukan lokasi folder mlruns (dibuat di dalam MLProject)
+          # Tentukan lokasi folder mlruns (dibuat di dalam MLProject)
           export MLFLOW_TRACKING_URI="MLProject/mlruns"
           
-          # Mencari RUN_ID terakhir yang statusnya FINISHED
-          RUN_ID=$(conda run -n mlflow-env mlflow search runs --experiment-name "${{ env.MLFLOW_EXP_NAME }}" \
+          # FIX: Mengganti 'search runs' menjadi 'runs search'
+          RUN_ID=$(conda run -n mlflow-env mlflow runs search --experiment-name "${{ env.MLFLOW_EXP_NAME }}" \
                    --order-by "attributes.start_time DESC" \
                    --max-results 1 \
-                   --query "attributes.status = 'FINISHED'" \
+                   --filter "attributes.status = 'FINISHED'" \
                    | grep 'run_id:' | head -n 1 | awk '{print $2}')
           
-          # Tambahan: Validasi agar tidak gagal di Step 7
           if [ -z "$RUN_ID" ]; then
-            echo "::error::Tidak dapat menemukan RUN ID MLflow yang selesai. Pastikan Step 4 berhasil dan nama eksperimen (${{ env.MLFLOW_EXP_NAME }}) sudah benar."
+            echo "::error::Tidak dapat menemukan RUN ID MLflow yang selesai."
             exit 1
           fi
           
@@ -71,10 +70,10 @@ jobs:
           echo "artifact_path=$ARTIFACT_PATH" >> $GITHUB_OUTPUT
           echo "Found Artifact Path: $ARTIFACT_PATH"
           
-      # Step 7: Build dan Push Docker Image (FINAL FIX: Set Tracking URI)
+      # Step 7: Build dan Push Docker Image (FIXED: Set Tracking URI)
       - name: Build and Push Docker Image
         run: |
-          # FIX 2: Tentukan lokasi folder mlruns untuk build-docker
+          # Tentukan lokasi folder mlruns untuk build-docker
           export MLFLOW_TRACKING_URI="MLProject/mlruns" 
 
           conda run -n mlflow-env mlflow models build-docker \
