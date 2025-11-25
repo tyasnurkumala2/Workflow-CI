@@ -4,7 +4,7 @@ on:
   push:
     branches:
       - main
-  # Optional: workflow_dispatch untuk menjalankan secara manual
+  # Trigger manual
   workflow_dispatch:
 
 env:
@@ -15,18 +15,17 @@ env:
   DOCKER_IMAGE_NAME: tyasnurkumala/smsml-risk-classifier 
   # Nama Experiment MLflow (sesuai yang digunakan di modelling.py)
   MLFLOW_EXP_NAME: SMSML_CI_CD 
-  # Port yang akan diekspos (standar MLflow adalah 8080)
+  # Port yang akan diekspos oleh Docker (standar MLflow adalah 8080)
   MODEL_PORT: 8080 
   # Path relatif ke folder mlruns
   MLFLOW_RUNS_PATH: MLProject/mlruns
 
 jobs:
   run-mlflow-and-deploy: 
-    # Menjalankan di runner Ubuntu
     runs-on: ubuntu-latest
     
     steps:
-      # Langkah 1: Set up job & Checkout repository
+      # Langkah 1: Checkout repository
       - name: Checkout repository
         uses: actions/checkout@v3
 
@@ -37,34 +36,28 @@ jobs:
           python-version: '3.10.13'
 
       # Langkah 3: Install dependencies
-      # Catatan: Langkah ini menggabungkan Check Env dan Install dependencies.
-      # Menggunakan conda untuk menjalankan skrip modelling.py, jadi conda env harus dibuat.
       - name: Install dependencies and Create Conda Env
-        # Check Env sudah tercakup secara implisit karena job berjalan di ubuntu-latest
         run: |
           echo "Memulai instalasi dependencies dan pembuatan Conda Env..."
           python -m pip install --upgrade pip
           # Instalasi Conda/pip dasar yang dibutuhkan
           pip install mlflow # Instalasi mlflow untuk CLI
-          # Membuat environment Conda
+          # Membuat environment Conda (berdasarkan MLProject/conda.yaml)
           conda env create -f MLProject/conda.yaml 
-          # Instalasi dependencies di luar Conda (jika ada yang dibutuhkan untuk skrip lain)
+          # Instalasi dependencies di luar Conda (jika ada)
           pip install -r MLProject/requirements.txt
 
       # Langkah 4: Run MLflow Project (Training)
       - name: Run MLflow Project (Training)
-        # Langkah Run mlflow project
         run: |
           echo "Memulai pelatihan model MLflow..."
           cd MLProject 
-          # Jalankan modelling.py di dalam environment Conda yang sudah dibuat
-          # Modelling.py harus mencakup logic MLflow tracking dan logging
+          # Jalankan skrip di dalam environment Conda
           conda run -n mlflow-env python modelling.py
 
       # Langkah 5 (Optional, for debugging): Upload MLflow Artifacts
-      # Mengunggah artefak hasil pelatihan. Ini tidak ada di gambar, tapi baik untuk CI.
       - name: Upload MLflow Artifacts
-        if: always() # Selalu jalankan, bahkan jika step sebelumnya gagal
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: model-artifacts-${{ github.run_id }}
@@ -72,21 +65,23 @@ jobs:
           retention-days: 7
 
       # Langkah 6: Get latest MLflow run_id (Cari Run ID Artefak Model Terbaik)
-      # Menggunakan MLflow API via Python untuk mencari Run ID terbaru dengan status FINISHED.
+      # Menggunakan teknik Python Here-Document (EOF) untuk menghindari error YAML.
       - name: Get Latest Model Artifact Path
         id: get_model_path
         run: |
           echo "Mencari Run ID MLflow terbaru..."
-          # Setup URI ke lokasi mlruns yang dibuat di Step 4
+          
+          # Setup URI ke lokasi mlruns
           export MLFLOW_TRACKING_URI="${{ env.MLFLOW_RUNS_PATH }}" 
           
-          # Skrip Python untuk mencari Run ID
-          RUN_ID=$(conda run -n mlflow-env python -c "
+          # Jalankan skrip Python multi-baris
+          RUN_ID=$(conda run -n mlflow-env python - << EOF
 import mlflow
 import os
+import pandas as pd # Tambahkan jika MLflow Search Runs mengembalikan DataFrame
 import sys
 
-# Menggunakan MLFLOW_TRACKING_URI dari shell environment
+# Setup Tracking URI
 experiment_name = os.environ.get('MLFLOW_EXP_NAME', 'Default') 
 mlflow.set_tracking_uri(os.environ.get('MLFLOW_TRACKING_URI'))
 
@@ -95,16 +90,18 @@ runs = mlflow.search_runs(
     experiment_names=[experiment_name],
     order_by=['attributes.start_time DESC'],
     max_results=1,
-    filter_string=\"attributes.status = 'FINISHED'\"
+    filter_string="attributes.status = 'FINISHED'"
 )
 
 if runs.empty:
     print('NOT_FOUND')
 else:
-    print(runs.iloc[0].run_id)
-"
+    # Mengambil run_id dari DataFrame hasil pencarian
+    print(runs.iloc[0].run_id) 
+EOF
           )
           
+          # Validasi dan Ekspor Output
           if [ "$RUN_ID" == "NOT_FOUND" ] || [ -z "$RUN_ID" ]; then
             echo "::error::Tidak dapat menemukan RUN ID MLflow yang selesai. Deploy dibatalkan."
             exit 1
@@ -117,22 +114,19 @@ else:
 
       # Langkah 7: Log in to Docker Hub
       - name: Login to Docker Hub
-        uses: docker/login-action@v3 # Menggunakan v3 yang terbaru dan stabil
+        uses: docker/login-action@v3
         with:
           username: ${{ env.DOCKER_USERNAME }}
           password: ${{ env.DOCKER_PASSWORD }} 
 
-      # Langkah 8: Build Docker Model & Tag Docker Image & Push Docker Image (CD)
-      # Semua digabungkan menggunakan perintah `mlflow models build-docker` yang sudah mencakup build dan tagging.
-      # Perintah ini secara otomatis menggunakan model URI dari step sebelumnya.
+      # Langkah 8: Build dan Push Docker Image (CD)
       - name: Build and Push Docker Image
         run: |
           echo "Memulai proses Build dan Push Docker Image..."
-          # Export URI lagi untuk CLI yang digunakan oleh `mlflow models build-docker`
+          # Export URI lagi untuk CLI
           export MLFLOW_TRACKING_URI="${{ env.MLFLOW_RUNS_PATH }}" 
           
-          # Build dan Tag docker image menggunakan model URI dari step sebelumnya
-          # Flag --push otomatis mendorong image setelah build berhasil
+          # Build dan Tag docker image, lalu --push ke Docker Hub
           conda run -n mlflow-env mlflow models build-docker \
             --model-uri ${{ steps.get_model_path.outputs.artifact_path }} \
             --name ${{ env.DOCKER_IMAGE_NAME }}:latest \
@@ -141,7 +135,3 @@ else:
             --push
             
           echo "✅ Docker image ${{ env.DOCKER_IMAGE_NAME }}:latest berhasil dibuat dan didorong ke Docker Hub."
-
-      # Langkah Post/Complete job
-      # Post Log in, Post Set up Python, Post Run actions/checkout@v3, Complete job
-      # Langkah 'Post' ini secara otomatis ditangani oleh GitHub Actions runner.
