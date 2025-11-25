@@ -4,7 +4,8 @@ on:
   push:
     branches:
       - main
-
+  
+# --- 1. DEFINISI ENVIRONMENT VARIABLES & SECRETS ---
 env:
   DOCKER_USERNAME: ${{ secrets.DOCKER_USERNAME }}
   DOCKER_PASSWORD: ${{ secrets.DOCKER_PASSWORD }}
@@ -17,158 +18,74 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      # Step 1: Checkout repository
+      # Step 1-4: Setup dan Training (Tidak ada perubahan)
       - name: Checkout repository
         uses: actions/checkout@v2
 
-      # Step 2: Setup Python
       - name: Set up Python 3.10.13
         uses: actions/setup-python@v2
         with:
           python-version: '3.10.13'
 
-      # Step 3: Install dependencies
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
           pip install -r MLProject/requirements.txt
-          pip install mlflow boto3 psycopg2-binary
+          conda env create -f MLProject/conda.yaml
+          pip install mlflow 
 
-      # Step 4: Setup SQLite Database untuk MLflow (Mengatasi Deprecation)
-      - name: Setup MLflow Database
-        run: |
-          cd MLProject
-          # Buat database SQLite untuk MLflow
-          python << EOF
-          import mlflow
-          import os
-          
-          # Set tracking URI ke SQLite database (menggantikan filesystem backend)
-          mlflow.set_tracking_uri("sqlite:///mlflow.db")
-          
-          # Buat experiment jika belum ada
-          try:
-              exp_id = mlflow.create_experiment("${{ env.MLFLOW_EXP_NAME }}")
-              print(f"Created new experiment with ID: {exp_id}")
-          except:
-              exp = mlflow.get_experiment_by_name("${{ env.MLFLOW_EXP_NAME }}")
-              print(f"Using existing experiment with ID: {exp.experiment_id}")
-          EOF
-
-      # Step 5: Run MLflow Project (Training) dengan Database Backend
       - name: Run MLflow Project (Training)
         run: |
           cd MLProject 
-          MLFLOW_TRACKING_URI="sqlite:///mlflow.db" python modelling.py
+          conda run -n mlflow-env python modelling.py 
 
-      # Step 6: Login ke Docker Hub
+      # Step 5: Login ke Docker Hub
       - name: Login to Docker Hub
-        uses: docker/login-action@v2
+        uses: docker/login-action@v1
         with:
           username: ${{ env.DOCKER_USERNAME }}
-          password: ${{ env.DOCKER_PASSWORD }}
+          password: ${{ env.DOCKER_PASSWORD }} 
 
-      # Step 7: Cari Model Terbaik dari Database
-      - name: Get Best Model
-        id: get_model
+      # Step 6: Cari Run ID Artefak Model Terbaik (FIXED)
+      - name: Get Latest Model Artifact Path
+        id: get_model_path
         run: |
-          cd MLProject
-          python << EOF
-          import mlflow
-          import os
+          # Tentukan lokasi folder mlruns (dibuat di dalam MLProject)
+          export MLFLOW_TRACKING_URI="MLProject/mlruns"
           
-          mlflow.set_tracking_uri("sqlite:///mlflow.db")
+          # FIX: Mengganti 'search runs' menjadi 'runs search'
+          RUN_ID=$(conda run -n mlflow-env mlflow runs search --experiment-name "${{ env.MLFLOW_EXP_NAME }}" \
+                   --order-by "attributes.start_time DESC" \
+                   --max-results 1 \
+                   --filter "attributes.status = 'FINISHED'" \
+                   | grep 'run_id:' | head -n 1 | awk '{print $2}')
           
-          # Cari experiment
-          exp = mlflow.get_experiment_by_name("${{ env.MLFLOW_EXP_NAME }}")
-          if exp is None:
-              print("::error::Experiment tidak ditemukan")
-              exit(1)
+          if [ -z "$RUN_ID" ]; then
+            echo "::error::Tidak dapat menemukan RUN ID MLflow yang selesai."
+            exit 1
+          fi
           
-          # Cari runs terbaru yang FINISHED
-          runs = mlflow.search_runs(
-              experiment_ids=[exp.experiment_id],
-              filter_string="status = 'FINISHED'",
-              order_by=["start_time DESC"],
-              max_results=1
-          )
+          ARTIFACT_PATH="runs:/$RUN_ID/tensorflow_model" 
           
-          if runs.empty:
-              print("::error::Tidak ada runs yang FINISHED")
-              exit(1)
+          echo "artifact_path=$ARTIFACT_PATH" >> $GITHUB_OUTPUT
+          echo "Found Artifact Path: $ARTIFACT_PATH"
           
-          run_id = runs.iloc[0]['run_id']
-          print(f"Found Run ID: {run_id}")
-          
-          # Cek artifact yang tersedia
-          client = mlflow.tracking.MlflowClient()
-          artifacts = client.list_artifacts(run_id)
-          print("Available artifacts:")
-          for art in artifacts:
-              print(f" - {art.path}")
-          
-          # Tentukan model path berdasarkan artifact yang ada
-          model_path = None
-          possible_paths = ["model", "tensorflow_model", "mlflow-model", "best_model"]
-          
-          for path in possible_paths:
-              if any(art.path == path or art.path.startswith(path + "/") for art in artifacts):
-                  model_path = path
-                  break
-          
-          if model_path is None and len(artifacts) > 0:
-              # Gunakan artifact pertama jika tidak ada yang match
-              model_path = artifacts[0].path
-          
-          if model_path is None:
-              print("::error::Tidak ada model artifact yang ditemukan")
-              exit(1)
-              
-          artifact_uri = f"runs:/{run_id}/{model_path}"
-          print(f"Using model path: {model_path}")
-          print(f"Artifact URI: {artifact_uri}")
-          
-          with open(os.environ['GITHUB_OUTPUT'], 'a') as fh:
-              print(f'run_id={run_id}', file=fh)
-              print(f'model_path={model_path}', file=fh)
-              print(f'artifact_uri={artifact_uri}', file=fh)
-          EOF
-
-      # Step 8: Build dan Push Docker Image dengan Database Context
+      # Step 7: Build dan Push Docker Image (FIXED: Set Tracking URI)
       - name: Build and Push Docker Image
         run: |
-          cd MLProject
-          
-          echo "Building Docker image with model: ${{ steps.get_model.outputs.artifact_uri }}"
-          echo "Run ID: ${{ steps.get_model.outputs.run_id }}"
-          echo "Model Path: ${{ steps.get_model.outputs.model_path }}"
-          
-          # Build Docker image dengan model dari database
-          MLFLOW_TRACKING_URI="sqlite:///mlflow.db" mlflow models build-docker \
-            --model-uri "${{ steps.get_model.outputs.artifact_uri }}" \
-            --name "${{ env.DOCKER_IMAGE_NAME }}" \
+          # Tentukan lokasi folder mlruns untuk build-docker
+          export MLFLOW_TRACKING_URI="MLProject/mlruns" 
+
+          conda run -n mlflow-env mlflow models build-docker \
+            --model-uri ${{ steps.get_model_path.outputs.artifact_path }} \
+            --name ${{ env.DOCKER_IMAGE_NAME }}:latest \
             --install-mlflow
-          
-          # Push image ke Docker Hub
-          docker push "${{ env.DOCKER_IMAGE_NAME }}:latest"
-          
+            
           echo "✅ Docker image ${{ env.DOCKER_IMAGE_NAME }}:latest berhasil dibuat dan didorong ke Docker Hub."
 
-      # Step 9: Upload Artifacts dan Database
+      # Step 8: Upload MLflow Artifacts
       - name: Upload MLflow Artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: mlflow-artifacts-${{ github.run_id }}
-          path: |
-            MLProject/mlflow.db
-            MLProject/mlruns/
-          retention-days: 30
-
-      # Step 10: Simpan Database sebagai Cache (Opsional)
-      - name: Cache MLflow Database
-        uses: actions/cache@v3
-        with:
-          path: MLProject/mlflow.db
-          key: mlflow-db-${{ github.sha }}
-          restore-keys: |
-            mlflow-db-
+          name: model-artifacts-${{ github.run_id }}
+          path: mlruns/
