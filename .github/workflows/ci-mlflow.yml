@@ -59,7 +59,7 @@ jobs:
         password: ${{ env.DOCKER_PASSWORD }}
 
     # -------------------------------------------------
-    # 6. GET LATEST MLFLOW RUN ID (PYTHON FIXED)
+    # 6. GET LATEST MLFLOW RUN ID (Python Heredoc FIX)
     # -------------------------------------------------
     - name: Get Latest Model Artifact Path
       id: get_model_path
@@ -70,10 +70,10 @@ jobs:
 import mlflow
 from mlflow.tracking import MlflowClient
 
-exp_name="${{ env.MLFLOW_EXP_NAME }}"
+exp_name = "${{ env.MLFLOW_EXP_NAME }}"
 client = MlflowClient()
-exp = client.get_experiment_by_name(exp_name)
 
+exp = client.get_experiment_by_name(exp_name)
 if exp is None:
     print("")
     exit()
