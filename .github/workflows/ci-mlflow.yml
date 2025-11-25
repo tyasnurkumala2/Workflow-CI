@@ -33,10 +33,10 @@ jobs:
           cd MLProject  # Pindah ke folder MLProject
           conda run -n mlflow-env python modelling.py  # Jalankan modelling.py di dalam environment Conda
 
-      # Step 5: Upload MLflow Artifacts
+    # Step 5: Upload MLflow Artifacts (PASTIKAN SUDAH MENGGUNAKAN PATH INI)
       - name: Upload MLflow Artifacts
         uses: actions/upload-artifact@v4
         with:
           name: model-artifacts-${{ github.run_id }}
-          path: mlruns  # Path to MLflow artifacts
+          path: MLProject/mlruns  # <--- INI PATH YANG BENAR
           retention-days: 7
