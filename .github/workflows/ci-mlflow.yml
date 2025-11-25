@@ -5,6 +5,7 @@ on:
     branches:
       - main
   
+# --- 1. DEFINISI ENVIRONMENT VARIABLES & SECRETS ---
 env:
   DOCKER_USERNAME: ${{ secrets.DOCKER_USERNAME }}
   DOCKER_PASSWORD: ${{ secrets.DOCKER_PASSWORD }}
@@ -17,7 +18,7 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      # Step 1-5 (Setup, Training, dan Login, tidak ada perubahan)
+      # Step 1-4: Setup dan Training (Tidak ada perubahan)
       - name: Checkout repository
         uses: actions/checkout@v2
 
@@ -32,73 +33,52 @@ jobs:
           pip install -r MLProject/requirements.txt
           conda env create -f MLProject/conda.yaml
           pip install mlflow 
-
       - name: Run MLflow Project (Training)
         run: |
           cd MLProject 
           conda run -n mlflow-env python modelling.py 
-
+      # Step 5: Login ke Docker Hub
       - name: Login to Docker Hub
         uses: docker/login-action@v1
         with:
           username: ${{ env.DOCKER_USERNAME }}
           password: ${{ env.DOCKER_PASSWORD }} 
 
-      # Step 6: Cari Run ID Artefak Model Terbaik (FINAL FIX: Python Output Sederhana)
+      # Step 6: Cari Run ID Artefak Model Terbaik (FIXED)
       - name: Get Latest Model Artifact Path
         id: get_model_path
         run: |
-          # 1. Gunakan Python Script untuk mencari RUN_ID dan mencetaknya ke stdout
-          # Python script HANYA MENCETAK RUN_ID
-          RUN_ID=$(conda run -n mlflow-env python -c "
-import mlflow
-import os
-import sys
-
-TRACKING_URI = os.path.join('MLProject', 'mlruns')
-mlflow.set_tracking_uri(TRACKING_URI)
-experiment_name = '${{ env.MLFLOW_EXP_NAME }}'
-
-runs = mlflow.search_runs(
-    experiment_names=[experiment_name],
-    order_by=['attributes.start_time DESC'],
-    max_results=1,
-    filter_string=\"attributes.status = 'FINISHED'\"
-)
-
-if runs.empty:
-    # Cetak string 'NOT_FOUND' jika tidak ada run
-    print('NOT_FOUND')
-else:
-    # Cetak hanya RUN_ID ke stdout
-    print(runs.iloc[0].run_id)
-"
-          )
+          # Tentukan lokasi folder mlruns (dibuat di dalam MLProject)
+          export MLFLOW_TRACKING_URI="MLProject/mlruns"
           
-          # 2. Shell mengambil output dan melakukan validasi/setup
-          if [ "$RUN_ID" == "NOT_FOUND" ] || [ -z "$RUN_ID" ]; then
-            echo "::error::Tidak dapat menemukan RUN ID MLflow yang selesai. RUN_ID kosong atau tidak ditemukan."
+          # FIX: Mengganti 'runs search' menjadi 'search runs'
+          RUN_ID=$(conda run -n mlflow-env mlflow search runs --experiment-name "${{ env.MLFLOW_EXP_NAME }}" \
+                   --order-by "attributes.start_time DESC" \
+                   --max-results 1 \
+                   --filter "attributes.status = 'FINISHED'" \
+                   | grep 'run_id' | head -n 1 | awk '{print $2}')
+          
+          if [ -z "$RUN_ID" ]; then
+            echo "::error::Tidak dapat menemukan RUN ID MLflow yang selesai."
             exit 1
           fi
-
+          
           ARTIFACT_PATH="runs:/$RUN_ID/tensorflow_model" 
           
-          # Tulis ke GITHUB_OUTPUT
           echo "artifact_path=$ARTIFACT_PATH" >> $GITHUB_OUTPUT
           echo "Found Artifact Path: $ARTIFACT_PATH"
           
-      # Step 7: Build dan Push Docker Image
+      # Step 7: Build dan Push Docker Image (FIXED: Set Tracking URI)
       - name: Build and Push Docker Image
         run: |
+          # Tentukan lokasi folder mlruns untuk build-docker
           export MLFLOW_TRACKING_URI="MLProject/mlruns" 
-
           conda run -n mlflow-env mlflow models build-docker \
             --model-uri ${{ steps.get_model_path.outputs.artifact_path }} \
             --name ${{ env.DOCKER_IMAGE_NAME }}:latest \
             --install-mlflow
             
           echo "✅ Docker image ${{ env.DOCKER_IMAGE_NAME }}:latest berhasil dibuat dan didorong ke Docker Hub."
-
       # Step 8: Upload MLflow Artifacts
       - name: Upload MLflow Artifacts
         uses: actions/upload-artifact@v4
