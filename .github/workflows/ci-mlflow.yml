@@ -1,127 +1,42 @@
-name: MLflow CI/CD Docker Workflow
+name: MLflow CI Workflow
 
 on:
   push:
     branches:
-      - main
-
-env:
-  DOCKER_USERNAME: ${{ secrets.DOCKER_USERNAME }}
-  DOCKER_PASSWORD: ${{ secrets.DOCKER_PASSWORD }}
-  DOCKER_IMAGE_NAME: tyasnurkumala/smsml-risk-classifier
-  MLFLOW_EXP_NAME: SMSML_CI_CD
-  MODEL_PORT: 8080
+      - main  # Trigger saat ada perubahan di branch main
 
 jobs:
-  run-mlflow-and-deploy:
+  run-mlflow:
     runs-on: ubuntu-latest
 
     steps:
-      # -------------------------------------------------
-      # 1. CHECKOUT
-      # -------------------------------------------------
+      # Step 1: Checkout repository
       - name: Checkout repository
         uses: actions/checkout@v2
 
-      # -------------------------------------------------
-      # 2. SETUP CONDA
-      # -------------------------------------------------
-      - name: Set up Conda
-        uses: conda-incubator/setup-miniconda@v3
+      # Step 2: Set up Python environment
+      - name: Set up Python 3.10.13
+        uses: actions/setup-python@v2
         with:
-          activate-environment: mlflow-env
-          environment-file: MLProject/conda.yaml
-          auto-activate-base: false
+          python-version: '3.10.13'
 
-      # -------------------------------------------------
-      # 3. INSTALL DEPENDENCIES
-      # -------------------------------------------------
+      # Step 3: Install dependencies
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install -r MLProject/requirements.txt
-          pip install mlflow
+          pip install -r MLProject/requirements.txt  # Install dependencies dari requirements.txt
+          conda env create -f MLProject/conda.yaml  # Install dependencies dari conda.yaml
 
-      # -------------------------------------------------
-      # 4. RUN TRAINING
-      # -------------------------------------------------
-      - name: Run MLflow Training
+      # Step 4: Change directory to MLProject and run MLflow project
+      - name: Run MLflow Project
         run: |
-          export MLFLOW_TRACKING_URI="MLProject/mlruns"
-          cd MLProject
-          conda run -n mlflow-env python modelling.py
+          cd MLProject  # Pindah ke folder MLProject
+          conda run -n mlflow-env python modelling.py  # Jalankan modelling.py di dalam environment Conda
 
-      # -------------------------------------------------
-      # 5. LOGIN DOCKER
-      # -------------------------------------------------
-      - name: Login to Docker Hub
-        uses: docker/login-action@v1
-        with:
-          username: ${{ env.DOCKER_USERNAME }}
-          password: ${{ env.DOCKER_PASSWORD }}
-
-      # -------------------------------------------------
-      # 6. GET LATEST RUN ID (FULLY FIXED)
-      # -------------------------------------------------
-      - name: Get Latest Model Artifact Path
-        id: get_model_path
-        run: |
-          export MLFLOW_TRACKING_URI="MLProject/mlruns"
-
-          RUN_ID=$(conda run -n mlflow-env python - << 'EOF'
-import mlflow
-from mlflow.tracking import MlflowClient
-
-exp_name = "${{ env.MLFLOW_EXP_NAME }}"
-client = MlflowClient()
-
-exp = client.get_experiment_by_name(exp_name)
-if exp is None:
-    print("")
-    exit()
-
-runs = client.search_runs(
-    experiment_ids=[exp.experiment_id],
-    filter_string="attributes.status = 'FINISHED'",
-    order_by=["attributes.start_time DESC"],
-    max_results=1
-)
-
-if len(runs) == 0:
-    print("")
-else:
-    print(runs[0].info.run_id)
-EOF
-)
-
-          if [ -z "$RUN_ID" ]; then
-            echo "::error::Tidak dapat menemukan RUN ID MLflow yang selesai."
-            exit 1
-          fi
-
-          ARTIFACT_PATH="runs:/$RUN_ID/tensorflow_model"
-          echo "artifact_path=$ARTIFACT_PATH" >> $GITHUB_OUTPUT
-          echo "Found Artifact Path: $ARTIFACT_PATH"
-
-      # -------------------------------------------------
-      # 7. BUILD + PUSH DOCKER
-      # -------------------------------------------------
-      - name: Build and Push Docker Image
-        run: |
-          export MLFLOW_TRACKING_URI="MLProject/mlruns"
-          conda run -n mlflow-env mlflow models build-docker \
-            --model-uri ${{ steps.get_model_path.outputs.artifact_path }} \
-            --name ${{ env.DOCKER_IMAGE_NAME }}:latest \
-            --install-mlflow
-
-          docker push ${{ env.DOCKER_IMAGE_NAME }}:latest
-          echo "Docker image pushed: ${{ env.DOCKER_IMAGE_NAME }}:latest"
-
-      # -------------------------------------------------
-      # 8. UPLOAD ARTIFACTS
-      # -------------------------------------------------
+      # Step 5: Upload MLflow Artifacts
       - name: Upload MLflow Artifacts
         uses: actions/upload-artifact@v4
         with:
           name: model-artifacts-${{ github.run_id }}
-          path: MLProject/mlruns
+          path: mlruns  # Path to MLflow artifacts
+          retention-days: 7
